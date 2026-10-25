@@ -1,0 +1,31 @@
+create extension if not exists pgcrypto;
+create type public.food_kind as enum ('prepared_dish','ingredient','packaged','custom','my_version');
+create type public.serving_mode as enum ('count','household','grams_only');
+create type public.source_kind as enum ('reference','label','user_entered');
+create type public.nutrient_basis as enum ('per_100g','per_serving');
+create type public.alias_quality as enum ('exact','approximate');
+
+create table public.data_sources (id uuid primary key default gen_random_uuid(), provider text not null, dataset text not null, version text not null, url text, licence_note text, retrieved_at timestamptz not null, unique(provider,dataset,version));
+create table public.source_records (id uuid primary key default gen_random_uuid(), source_id uuid not null references public.data_sources(id), source_code text not null, raw_row jsonb not null, checksum text not null, created_at timestamptz not null default now(), unique(source_id,source_code));
+create table public.food_groups (id uuid primary key default gen_random_uuid(), name text not null unique, default_food_id uuid);
+create table public.foods (id uuid primary key default gen_random_uuid(), owner_id uuid references auth.users(id), source_record_id uuid references public.source_records(id), canonical_name text not null, group_id uuid references public.food_groups(id), kind public.food_kind not null, state text, serving_mode public.serving_mode not null, tags text[] not null default '{}', source_kind public.source_kind not null, derived_from_food_id uuid references public.foods(id), review_flags text[] not null default '{}', created_at timestamptz not null default now());
+alter table public.food_groups add constraint food_groups_default_food_fk foreign key (default_food_id) references public.foods(id);
+create table public.food_aliases (id uuid primary key default gen_random_uuid(), food_id uuid not null references public.foods(id) on delete cascade, alias text not null, language text not null default 'en', script text not null default 'latin', alias_type text not null default 'source', verified boolean not null default false, match_quality public.alias_quality not null default 'exact', unique(food_id,alias));
+create table public.food_servings (id uuid primary key default gen_random_uuid(), food_id uuid not null references public.foods(id) on delete cascade, name text not null, unit_class text not null, grams numeric, ml numeric, derived boolean not null default false, source text not null);
+create table public.food_nutrients (id uuid primary key default gen_random_uuid(), food_id uuid not null references public.foods(id) on delete cascade, basis public.nutrient_basis not null, serving_id uuid references public.food_servings(id) on delete cascade, kcal numeric, protein_g numeric, carbs_g numeric, fat_g numeric, sat_fat_g numeric, fibre_g numeric, free_sugars_g numeric, total_sugars_g numeric, sodium_mg numeric, extra jsonb not null default '{}', source_id uuid references public.data_sources(id), confidence text, check ((basis = 'per_100g' and serving_id is null) or (basis = 'per_serving' and serving_id is not null)), unique(food_id,basis,serving_id));
+create table public.profiles (id uuid primary key references auth.users(id) on delete cascade, timezone text not null default 'Asia/Kolkata', units jsonb not null default '{}', display_preferences jsonb not null default '{}', created_at timestamptz not null default now());
+create table public.food_logs (id uuid primary key, owner_id uuid not null references auth.users(id), consumed_at timestamptz not null, local_date date not null, meal_type text not null, food_id uuid references public.foods(id) on delete set null, quantity numeric not null check(quantity > 0), unit text not null, name_snapshot text not null, serving_name_snapshot text, source_kind public.source_kind not null, notes text, created_at timestamptz not null default now());
+create table public.food_log_nutrients (log_id uuid primary key references public.food_logs(id) on delete cascade, base_snapshot jsonb not null, final_totals jsonb not null, completeness jsonb not null default '{}', snapshot_version integer not null default 1 check(snapshot_version > 0), created_at timestamptz not null default now());
+create index food_aliases_alias_idx on public.food_aliases using gin (to_tsvector('simple', alias));
+create index foods_group_idx on public.foods(group_id);
+create index food_logs_owner_date_idx on public.food_logs(owner_id,local_date desc);
+
+alter table public.profiles enable row level security; alter table public.foods enable row level security; alter table public.food_aliases enable row level security; alter table public.food_servings enable row level security; alter table public.food_nutrients enable row level security; alter table public.food_logs enable row level security; alter table public.food_log_nutrients enable row level security;
+create policy "profiles own row" on public.profiles for all using (id = auth.uid()) with check (id = auth.uid());
+create policy "catalogue read and private owner read" on public.foods for select using (owner_id is null or owner_id = auth.uid());
+create policy "private foods owner write" on public.foods for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "visible food relations read" on public.food_aliases for select using (exists(select 1 from public.foods f where f.id = food_id and (f.owner_id is null or f.owner_id = auth.uid())));
+create policy "visible servings read" on public.food_servings for select using (exists(select 1 from public.foods f where f.id = food_id and (f.owner_id is null or f.owner_id = auth.uid())));
+create policy "visible nutrients read" on public.food_nutrients for select using (exists(select 1 from public.foods f where f.id = food_id and (f.owner_id is null or f.owner_id = auth.uid())));
+create policy "logs own rows" on public.food_logs for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "log nutrients through owned log" on public.food_log_nutrients for all using (exists(select 1 from public.food_logs l where l.id = log_id and l.owner_id = auth.uid())) with check (exists(select 1 from public.food_logs l where l.id = log_id and l.owner_id = auth.uid()));
