@@ -1,0 +1,11 @@
+create type public.tracker_kind as enum ('counter','amount','yes_no','measurement');
+create type public.tracker_status as enum ('active','paused','archived');
+create table public.trackers (id uuid primary key default gen_random_uuid(), owner_id uuid not null references auth.users(id) on delete cascade, name text not null, kind public.tracker_kind not null, unit text, icon text, colour text, linked_food_id uuid references public.foods(id) on delete set null, linked_serving_id uuid references public.food_servings(id) on delete set null, status public.tracker_status not null default 'active', display_order integer not null default 0, created_at timestamptz not null default now());
+create table public.tracker_target_versions (id uuid primary key default gen_random_uuid(), tracker_id uuid not null references public.trackers(id) on delete cascade, direction text not null check(direction in ('at_least','at_most','exactly')), target_value numeric not null, starts_at date not null, ends_at date);
+create table public.tracker_entries (id uuid primary key, owner_id uuid not null references auth.users(id) on delete cascade, tracker_id uuid not null references public.trackers(id) on delete cascade, local_date date not null, occurred_at timestamptz not null, value numeric not null, note text, source text not null default 'manual', created_at timestamptz not null default now());
+alter table public.food_logs add column if not exists tracker_id uuid references public.trackers(id) on delete set null;
+alter table public.trackers enable row level security; alter table public.tracker_target_versions enable row level security; alter table public.tracker_entries enable row level security;
+create policy "trackers own rows" on public.trackers for all using(owner_id=auth.uid()) with check(owner_id=auth.uid());
+create policy "tracker targets through owned tracker" on public.tracker_target_versions for all using(exists(select 1 from public.trackers t where t.id=tracker_id and t.owner_id=auth.uid())) with check(exists(select 1 from public.trackers t where t.id=tracker_id and t.owner_id=auth.uid()));
+create policy "tracker entries own rows" on public.tracker_entries for all using(owner_id=auth.uid()) with check(owner_id=auth.uid());
+create index tracker_entries_owner_tracker_date_idx on public.tracker_entries(owner_id,tracker_id,local_date);

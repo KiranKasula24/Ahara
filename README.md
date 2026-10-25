@@ -12,7 +12,7 @@ M0–M1 foundation for an India-first personal nutrition tracker. It contains a 
 
 ## Verification
 
-Run `npm run check:contrast`, `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
+Run `npm run contrast`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:db`, and `npm run build`.
 
 ## Data and security notes
 

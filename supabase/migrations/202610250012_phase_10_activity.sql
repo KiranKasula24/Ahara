@@ -1,0 +1,5 @@
+create table public.daily_steps (id uuid primary key default gen_random_uuid(), owner_id uuid not null references auth.users(id) on delete cascade, local_date date not null, steps integer not null check(steps >= 0), created_at timestamptz not null default now(), unique(owner_id,local_date));
+create table public.activities (id uuid primary key default gen_random_uuid(), owner_id uuid not null references auth.users(id) on delete cascade, occurred_at timestamptz not null, local_date date not null, activity_type text not null, duration_minutes numeric, distance_km numeric, calories numeric, created_at timestamptz not null default now());
+alter table public.daily_steps enable row level security; alter table public.activities enable row level security;
+create policy "steps own rows" on public.daily_steps for all using(owner_id=auth.uid()) with check(owner_id=auth.uid());
+create policy "activities own rows" on public.activities for all using(owner_id=auth.uid()) with check(owner_id=auth.uid());

@@ -1,35 +1,32 @@
-import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import * as XLSX from "xlsx";
+import { normaliseRows, thresholds, type Row } from "./import-indb/core";
 
-type Row = Record<string, unknown>;
-const config = { energyKcalMax: 900, macroEnergyPercent: .15, macroEnergyAbsolute: 10, kjKcal: 4.184, kjKcalTolerance: .01, servingConsistency: .10, suspiciousZeroEnergy: 150 };
-const countUnits = new Set(["idli","dosa","chapati","roti","piece","egg","ladoo","vada","poori","parantha","biscuit","cookie","cutlet","slice","sandwich","pesarattu"]);
-function n(row: Row, key: string): number | null { const value = row[key]; if (value === undefined || value === null || value === "") return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
-function text(row: Row, key: string): string { return String(row[key] ?? "").trim(); }
-function splitName(name: string) { const match = name.match(/^([^()]+?)(?:\s*\((.+)\))?$/); return { canonical: (match?.[1] ?? name).trim(), aliases: (match?.[2] ?? "").split(/[\/;|]/).map(x => x.trim()).filter(Boolean) }; }
-function classify(unit: string) { const normalized = unit.trim().toLowerCase(); return countUnits.has(normalized) ? "count" : normalized ? "household" : "grams_only"; }
-function variantGroup(name: string) { return name.toLowerCase().replace(/\b(vegetable|plain|with|and|instant|semolina|moong|bean|masala)\b/g, "").replace(/\s+/g, " ").trim() || name.toLowerCase(); }
-function flag(row: Row): string[] {
-  const result: string[] = []; const kcal = n(row,"energy_kcal"), kj = n(row,"energy_kj"), carb = n(row,"carb_g"), protein = n(row,"protein_g"), fat = n(row,"fat_g"), fibre = n(row,"fibre_g"), sugar = n(row,"freesugar_g");
-  if (Object.values(row).some(v => typeof v === "number" && v < 0)) result.push("negative_value");
-  if (kcal !== null && kcal >= config.energyKcalMax) result.push("energy_ge_900_kcal_per_100g");
-  if (carb !== null && protein !== null && fat !== null && carb + protein + fat > 100) result.push("macros_over_100g");
-  if (fibre !== null && carb !== null && fibre > carb) result.push("fibre_over_carbs"); if (sugar !== null && carb !== null && sugar > carb) result.push("free_sugars_over_carbs");
-  if (kcal !== null && protein !== null && carb !== null && fat !== null) { const expected = 4 * protein + 4 * carb + 9 * fat; if (Math.abs(kcal - expected) > Math.max(kcal * config.macroEnergyPercent, config.macroEnergyAbsolute)) result.push("energy_macro_simple"); }
-  if (kcal !== null && kj !== null && Math.abs(kj / kcal - config.kjKcal) / config.kjKcal > config.kjKcalTolerance) result.push("kj_kcal_ratio");
-  if (kcal !== null && kcal > config.suspiciousZeroEnergy && (fat === 0 || protein === 0 || n(row,"sodium_mg") === 0)) result.push("suspicious_zero");
-  return result;
-}
+const countUnits = new Set(["idli", "dosa", "chapati", "roti", "piece", "egg", "ladoo", "vada", "poori", "parantha", "biscuit", "cookie", "cutlet", "slice", "sandwich", "pesarattu"]);
+async function readJson<T>(file: string, fallback: T): Promise<T> { try { return JSON.parse(await fs.readFile(file, "utf8")) as T; } catch { return fallback; } }
+function csvRows(input: string): string[][] { return input.trim().split(/\r?\n/).map((line) => line.match(/(?:^|,)("(?:[^"]|"")*"|[^,]*)/g)?.map((cell) => cell.replace(/^,/, "").replace(/^"|"$/g, "").replace(/""/g, '"')) ?? []); }
+function csvCell(value: string): string { return `"${value.replace(/"/g, '""')}"`; }
 async function main() {
-  const args = process.argv.slice(2); const fileArg = args.indexOf("--file"); const file = fileArg >= 0 ? args[fileArg + 1] : "data/source/Anuvaad_INDB_2024.11.xlsx"; const output = args.includes("--output") ? args[args.indexOf("--output") + 1] : "data/output";
-  const workbook = XLSX.read(await fs.readFile(file)); const sheet = workbook.Sheets[workbook.SheetNames[0]]; const rows = XLSX.utils.sheet_to_json<Row>(sheet, { defval: null });
-  const zeroRates: Record<string, number> = {}; for (const column of Object.keys(rows[0] ?? {})) { const values = rows.map(r => n(r,column)).filter((v): v is number => v !== null); if (values.length) zeroRates[column] = values.filter(v => v === 0).length / values.length; }
-  const normalized = rows.map(row => { const parsed = splitName(text(row,"food_name")); const unit = text(row,"servings_unit"); return { source_code: text(row,"food_code"), raw_row: row, checksum: crypto.createHash("sha256").update(JSON.stringify(row)).digest("hex"), canonical_name: parsed.canonical, aliases: parsed.aliases, group: variantGroup(parsed.canonical), serving_mode: classify(unit), serving_unit: unit || null, flags: flag(row) }; });
-  const counts = normalized.reduce<Record<string,number>>((all,row) => { for (const item of row.flags) all[item] = (all[item] ?? 0) + 1; return all; }, {});
-  const report = { generated_at: new Date().toISOString(), input: path.resolve(file), rows: rows.length, columns: Object.keys(rows[0] ?? {}).length, thresholds: config, formulas: { macro_simple: "4*protein_g + 4*carb_g + 9*fat_g", macro_fibre_variant: "4*protein_g + 4*(carb_g-fibre_g) + 2*fibre_g + 9*fat_g", kj_kcal: "energy_kj / energy_kcal, expected 4.184" }, serving_modes: normalized.reduce<Record<string,number>>((a,r) => (a[r.serving_mode] = (a[r.serving_mode] ?? 0) + 1,a),{}), flags: counts, zero_rates: zeroRates, flagged_rows: normalized.filter(r => r.flags.length).map(r => ({ source_code:r.source_code, name:r.canonical_name, flags:r.flags })), note: "Published values are reported, never corrected. This dry-run artefact is idempotent because source_code is the stable key." };
-  await fs.mkdir(output,{recursive:true}); await fs.writeFile(path.join(output,"indb-validation-report.json"),JSON.stringify(report,null,2)); await fs.writeFile(path.join(output,"indb-normalized.json"),JSON.stringify(normalized,null,2));
-  console.log(`Imported ${rows.length} source rows for review. ${normalized.filter(r=>r.flags.length).length} rows have review flags.`); console.log(`Report: ${path.join(output,"indb-validation-report.json")}`);
+  const args = process.argv.slice(2); const fileIndex = args.indexOf("--file"); const file = fileIndex >= 0 ? args[fileIndex + 1] : "data/source/Anuvaad_INDB_2024.11.xlsx";
+  if (!args.includes("--dry-run") && !args.includes("--apply")) throw new Error("Choose --dry-run or --apply; importing never writes silently.");
+  const output = args.includes("--output") ? args[args.indexOf("--output") + 1] : "data/output";
+  const overrides = await readJson<Record<string, string>>("scripts/import-indb/variant-overrides.json", {});
+  const workbook = XLSX.read(await fs.readFile(file)); const rows = workbook.SheetNames.flatMap((name) => XLSX.utils.sheet_to_json<Row>(workbook.Sheets[name], { defval: null }));
+  const normalized = normaliseRows(rows, countUnits, overrides); if (normalized.some((row) => !row.source_code)) throw new Error("Every source row must have food_code before import.");
+  const zeroRates: Record<string, number> = {}; for (const key of Object.keys(rows[0] ?? {})) { const values = rows.map((row) => Number(row[key])).filter(Number.isFinite); if (values.length) zeroRates[key] = values.filter((value) => value === 0).length / values.length; }
+  const flagged = normalized.filter((row) => row.flags.length); const flags = flagged.flatMap((row) => row.flags).reduce<Record<string, number>>((all, flag) => ({ ...all, [flag]: (all[flag] ?? 0) + 1 }), {});
+  const rowsWithoutServing = rows.filter((row) => { const value = Number(row.unit_serving_energy_kcal); return !Number.isFinite(value) || value === 0; }).length;
+  const report = { generated_at: new Date().toISOString(), input: path.resolve(file), mode: args.includes("--apply") ? "apply" : "dry-run", rows: rows.length, thresholds, formulas: { simple: "4*protein_g + 4*carb_g + 9*fat_g", fibre_adjusted: "4*protein_g + 4*(carb_g-fibre_g) + 2*fibre_g + 9*fat_g", energy_units: "energy_kj / energy_kcal = 4.184 ±1%" }, serving_modes: normalized.reduce<Record<string, number>>((all, row) => ({ ...all, [row.serving_mode]: (all[row.serving_mode] ?? 0) + 1 }), {}), rows_without_serving_data: rowsWithoutServing, flags, zero_rates: zeroRates, flagged_rows: flagged.map((row) => ({ source_code: row.source_code, name: row.canonical_name, reasons: row.flags })), to_check: ["idli implied serving weight", "pesarattu implied serving weight"], published_values_changed: false };
+  await fs.mkdir(output, { recursive: true }); await fs.writeFile(path.join(output, "indb-normalized.json"), JSON.stringify(normalized, null, 2)); await fs.writeFile(path.join(output, "indb-validation-report.json"), JSON.stringify(report, null, 2));
+  await fs.writeFile(path.join(output, "indb-validation-summary.md"), `# INDB validation\n\nRows: ${rows.length}\n\nFlagged rows: ${flagged.length}\n\nPublished values were not changed. This report records flags for review, not corrections.\n`);
+  const aliasFile = await fs.access("data/aliases/telugu_names.csv").then(() => "data/aliases/telugu_names.csv").catch(() => "data/aliases/telugu_names_to_verify.csv");
+  const aliases = csvRows(await fs.readFile(aliasFile, "utf8")); const header = aliases.shift() ?? [];
+  const column = (name: string) => header.findIndex((cell) => cell.trim().toLowerCase().includes(name));
+  const englishIndex = column("english"); const transliterationIndex = column("transliteration"); const teluguIndex = column("telugu"); const confirmedIndex = column("correct");
+  const matches = aliases.map((row) => { const english = row[englishIndex] ?? ""; const candidates = normalized.filter((food) => food.canonical_name.toLowerCase().includes(english.toLowerCase()) || english.toLowerCase().includes(food.canonical_name.toLowerCase())).slice(0, 5); return [english, row[transliterationIndex] ?? "", row[teluguIndex] ?? "", row[confirmedIndex] ?? "", candidates.map((food) => `${food.source_code}: ${food.canonical_name}`).join(" | ")]; });
+  await fs.writeFile(path.join(output, "alias_matches_to_review.csv"), ["english,transliteration,telugu_script,status,candidates", ...matches.map((row) => row.map(csvCell).join(","))].join("\n"));
+  if (args.includes("--apply")) console.log("Normalisation completed. Run npm run load:indb to perform the service-role database write after reviewing the report.");
+  else console.log(`Dry run completed: ${rows.length} source rows; ${flagged.length} flagged for review.`);
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+main().catch((error: unknown) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });

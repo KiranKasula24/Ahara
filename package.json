@@ -9,14 +9,18 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
-    "check:contrast": "tsx scripts/check-contrast.ts",
+    "contrast": "tsx scripts/check-contrast.ts",
+    "check:contrast": "npm run contrast",
+    "test:db": "tsx scripts/test-db.ts",
     "import:indb": "tsx scripts/import-indb.ts",
     "load:indb": "tsx scripts/load-indb-to-supabase.ts"
+    ,"import:usda": "tsx scripts/import-usda-ingredients.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.4",
     "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.49.4",
     "@types/ws": "^8.18.2",
     "next": "^15.2.4",
     "react": "^19.0.0",
@@ -26,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.13.10",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
