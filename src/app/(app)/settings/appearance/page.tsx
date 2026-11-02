@@ -1,0 +1,2 @@
+import { PageHeader } from "@/components/app-shell/PageHeader";
+export default function AppearanceSettingsPage() { return <><PageHeader eyebrow="Settings" title="Appearance" description="Ahara uses a high-contrast obsidian theme designed for comfortable daily use." /><section className="form-card"><h2>Dark appearance</h2><p className="muted">The current release has one carefully contrast-tested dark theme. Motion respects your system&apos;s reduced-motion preference.</p></section></>; }

@@ -1,5 +1,9 @@
 # Ahara
 
+## Windows development server
+
+Run `run-dev.cmd` (or `npm.cmd run dev -- -p 3010` in PowerShell) and open http://localhost:3010. This bypasses PowerShell's `npm.ps1` execution-policy restriction and avoids an existing process on port 3000.
+
 M0–M1 foundation for an India-first personal nutrition tracker. It contains a strict TypeScript Next.js app, visual tokens/component primitives, Supabase schema with RLS, deterministic nutrition calculations, and an INDB audit importer.
 
 ## Local setup

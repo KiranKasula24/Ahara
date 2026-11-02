@@ -36,3 +36,11 @@ Implemented the hosted-Supabase email magic-link screen, an authenticated Today/
 ## UI shell expansion
 
 The primary navigation now exposes actual Today, Add, Activity, Insights, and Profile screens. Activity saves manual steps through the authenticated API; Insights loads the real week aggregate and labels unlogged days honestly. Barcode, tracker, adjustment, export, account deletion, and offline-replay screens still require final UI integration and end-to-end hosted-Supabase verification.
+
+## Frontend route rebuild — 26 October 2026
+
+- Replaced the single conditional client page with route-group layouts and dedicated `page.tsx` files for marketing, auth, Today, diary, add food, food catalogue/detail, recipes, activity, insights, goals, trackers, favourites, history, export, and settings subpages.
+- Added a responsive obsidian/orange App Shell with pathname-aware desktop sidebar and mobile bottom navigation, shared page headers, loading/error/404 states, and an install manifest.
+- Today, diary, add-food, activity, insights, login, and export call the existing authenticated Supabase/API paths. Preview data is visible only at `/today?preview=1` and is labelled as unsaved demo data.
+- Routes without a verified storage/API contract remain honest capability states, so no user nutrition or history is invented.
+- `npm run typecheck`, `npm run lint`, `npm test`, and `npm run contrast` pass. The production build began but did not finish within the available command window, so it still requires a completed local run.
