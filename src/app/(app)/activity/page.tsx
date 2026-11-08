@@ -1,4 +1,5 @@
 "use client";
+import { ActivityDashboard } from "@/components/activity/ActivityDashboard";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/app-shell/PageHeader";
 import { SignInRequired } from "@/components/RouteStates";

@@ -33,3 +33,11 @@ export async function PATCH(request: Request) {
   const { data: oldSnapshot } = await auth.client.from("food_log_nutrients").select("snapshot_version").eq("log_id", body.id).single(); const completeness = Object.fromEntries(Object.entries(result.nutrients).filter(([key]) => key !== "extra").map(([key, value]) => [key, value === null ? "unknown" : "complete"])); const { error: snapshotError } = await auth.client.from("food_log_nutrients").update({ base_snapshot: result.nutrients, final_totals: result.nutrients, completeness, snapshot_version: (oldSnapshot?.snapshot_version ?? 0) + 1 }).eq("log_id", body.id); if (snapshotError) return NextResponse.json({ error: snapshotError.message }, { status: 400 });
   return NextResponse.json({ id: body.id });
 }
+
+export async function DELETE(request: Request) {
+  const auth = await requireUser(request); if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "A log id is required." }, { status: 400 });
+  const { error } = await auth.client.from("food_logs").delete().eq("id", id);
+  return error ? NextResponse.json({ error: error.message }, { status: 400 }) : NextResponse.json({}, { status: 204 });
+}

@@ -44,3 +44,16 @@ The primary navigation now exposes actual Today, Add, Activity, Insights, and Pr
 - Today, diary, add-food, activity, insights, login, and export call the existing authenticated Supabase/API paths. Preview data is visible only at `/today?preview=1` and is labelled as unsaved demo data.
 - Routes without a verified storage/API contract remain honest capability states, so no user nutrition or history is invented.
 - `npm run typecheck`, `npm run lint`, `npm test`, and `npm run contrast` pass. The production build began but did not finish within the available command window, so it still requires a completed local run.
+
+## UX redesign implementation — 2 November 2026
+
+- Redesigned `/add` around food-first language, debounced cancellable search, serving-aware quantity controls, meal picker, post-save actions, and a live nutrition preview using the server-equivalent calculation rules. Missing nutrients remain unavailable rather than becoming zero.
+- Redesigned `/log` as a date-navigable meal diary with subtotals and a deliberate two-step authenticated removal flow.
+- Redesigned `/insights` to fetch on shared range changes and show logged-day/average summaries, a truthful calorie trend, top logged foods, and explicit activity-data limitations.
+- Typecheck, lint, unit tests (25) and contrast checks pass after these changes. Hosted-Supabase end-to-end verification and a completed production build remain required before release.
+
+## Catalogue and initial setup — 4 November 2026
+
+- Ran the reviewed INDB loader against the hosted Supabase configuration. It completed without an error after processing the validated 1,014 source rows; the loader preserves imported source values and raw records.
+- Added a Phase-14 migration and goal API for versioned intake and separate activity-energy targets, plus `/setup` onboarding and editable `/goals` UI. The new migration must be run in the hosted SQL Editor before the activity target can be saved.
+- The moved project now starts the production build without the prior OneDrive `readlink` error, but the build did not complete within the available command window and remains to be verified.

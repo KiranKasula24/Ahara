@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, type ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 const primary = [
   ["/today", "Today", "◉"], ["/log", "Log", "☷"], ["/add", "Add", "+"], ["/activity", "Activity", "↗"], ["/insights", "Insights", "⌁"],
@@ -12,7 +13,8 @@ const secondary = [["/recipes", "Recipes"], ["/favourites", "Favourites"], ["/tr
 function isActive(pathname: string, href: string) { return href === "/today" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`); }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname(); const router = useRouter(); const db = useMemo(supabase, []);
+  useEffect(() => { if (pathname === "/setup") return; void (async () => { const { data } = await db.auth.getSession(); if (!data.session) return; const { data: goals, error } = await db.from("goal_versions").select("kind").is("ends_at", null); const hasBoth = ["intake_kcal", "activity_kcal"].every((kind) => goals?.some((goal) => goal.kind === kind)); if (!error && !hasBoth) router.replace("/setup"); })(); }, [db, pathname, router]);
   return <div className="app-shell">
     <aside className="desktop-sidebar" aria-label="Primary navigation">
       <Link className="brand" href="/today"><span className="brand-mark">A</span><span>Ahara</span></Link>

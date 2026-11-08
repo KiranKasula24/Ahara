@@ -1,2 +1,2 @@
-import { AddFoodFlow } from "@/components/food/AddFoodFlow";
-export default function AddPage() { return <AddFoodFlow />; }
+import { AddFoodExperience } from "@/components/food/AddFoodExperience";
+export default function AddPage() { return <AddFoodExperience />; }
