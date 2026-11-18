@@ -198,7 +198,19 @@ export function AddFoodExperience() {
   return (
     <>
       <PageHeader eyebrow="Food diary" title="What did you eat?" description="Search dishes or ingredients, scan a pack, then choose the portion." />
-User responded: The build plan ends at P10, so there is no P11. P10 is the last build phase. It is the largest one, so it's in two parts, **A: offline and updates** and **B: export, delete and release checks**. The release checklist at the end covers any "P11" hardening.  None of this has been run, and I'm assuming two things about your repo from earlier phases: - `ApiError` is exported from `@/lib/api`, with a `status` field. - `PwaRegister` is mounted once in the root layout.  I can't see the root layout or `next.config.ts` from here. If a check below doesn't behave as described, send me the error text.  ## What offline can and can't do - **Works offline:** "Log again" and favourites that are already on screen. The entry is saved on the phone with its id and sent when you're back online. A replay can't create a duplicate because the server already treats the same id as a replay. - **Needs a connection:** search, scanning, My versions and adjustments. When the app is closed and you open it offline, you get a plain "You're offline" page instead of a browser error. - **Not cached:** the service worker caches only that offline page. Caching app pages or Supabase data would risk showing stale numbers, so I left it out on purpose. - **Update notice:** "A new version is ready · Update" appears after you deploy. It only runs in a production build, not `npm run dev`.  # Part A: offline queue, offline page, update notice  **New `src/lib/offline-queue.ts`**
+      {lastLogged && (
+        <div className="post-save" role="status">
+          {lastLogged.queued ? (
+            <p>{lastLogged.name} saved on this phone. It will be added to {lastLogged.meal} when you’re back online.</p>
+          ) : (
+            <p>{lastLogged.name} added to {lastLogged.meal}.</p>
+          )}
+          {lastLogged.warning && <p className="ax-note">{lastLogged.warning}</p>}
+          {!lastLogged.queued && <Link href={`/today?date=${lastLogged.date}`}>View day</Link>}
+          {!lastLogged.queued && <Link href={`/today?date=${lastLogged.date}&edit=${lastLogged.id}`}>Adjust</Link>}
+          <button onClick={() => void undo()}>Undo</button>
+        </div>
+      )}
       {error && <p className="inline-error" role="alert">{error}</p>}
       {whenBar}
 

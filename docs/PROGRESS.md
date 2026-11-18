@@ -25,17 +25,17 @@ Implemented the hosted-Supabase email magic-link screen, an authenticated Today/
 
 - Present: mobile shell, safe-area navigation, auth, Today, Add, Profile, server-authenticated search/logging, private-food and portion APIs.
 - In progress: dashboard ring treatment, full source/nutrient detail, edit affordance, and Phase-6 controls (custom food, portions, favourites, recents, re-log and copy-yesterday) need client integration.
-- Intentionally hidden: adjustments, tags, barcode, activity, trackers, insights, offline/PWA. Their backend/UI is not complete and no placeholder destination is shown.
+- Implemented: adjustments, tags, barcode, activity, trackers, insights, offline/PWA, export, and account deletion flows. Hosted-Supabase and real-device verification remain release checks.
 
 ## Phases 8–13 foundation
 
 - Added migrations for tags, packaged products/barcodes, activity/steps, trackers, aggregate indexes, and sync audit records.
 - Added authenticated APIs for tags, activity, tracker creation/entries, insights aggregates, JSON export, and account deletion (the latter requires the server-only service-role key at deployment).
-- Added an install manifest, deterministic queue deduplication, and an empty real-device performance record template. Activity, barcode, tracker, insight, export, and deletion screens remain unshipped until their complete UI and end-to-end checks are added.
+- Added an install manifest, deterministic offline queue deduplication, service-worker update handling, activity/tracker/insight UI, export, and account deletion flows. Complete hosted-Supabase and real-device verification remains.
 
 ## UI shell expansion
 
-The primary navigation now exposes actual Today, Add, Activity, Insights, and Profile screens. Activity saves manual steps through the authenticated API; Insights loads the real week aggregate and labels unlogged days honestly. Barcode, tracker, adjustment, export, account deletion, and offline-replay screens still require final UI integration and end-to-end hosted-Supabase verification.
+The primary navigation exposes actual Today, Add, Activity, Insights, and Profile screens. Activity saves manual steps through the authenticated API; Insights loads the real week aggregate and labels unlogged days honestly. Barcode, tracker, adjustment, export, account deletion, and offline replay are integrated; hosted-Supabase and real-device verification remain.
 
 ## Frontend route rebuild — 26 October 2026
 

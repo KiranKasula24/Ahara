@@ -1,3 +1,46 @@
-import { apiFetch } from "@/lib/api"; import { addFailed, classifyFailure, readQueue, removeQueued } from "@/lib/offline-queue"; import { supabase } from "@/lib/supabase";  let flushing = false;  /** Sends saved entries in order. The same id is sent every time, so a replay can never duplicate an entry. */ export async function flushQueue(): Promise<void> {   if (flushing || typeof navigator === "undefined" || !navigator.onLine) return;   flushing = true;   try {     const { data } = await supabase().auth.getSession();     const userId = data.session?.user.id;     if (!userId) return;     let sent = 0;     for (const item of readQueue()) {       if (item.userId !== userId) continue;
-       try {         await apiFetch("/api/logs", { method: "POST", json: item.payload });         removeQueued(item.payload.id);         sent += 1;       } catch (caught) {         const status = (caught as { status?: number }).status;         const message = caught instanceof Error ? caught.message : "";         const outcome = classifyFailure(status, message);         if (outcome === "done") {           removeQueued(item.payload.id);           sent += 1;         } else if (outcome === "drop") {           removeQueued(item.payload.id);           addFailed({ name: item.name, reason: message || "The server rejected it." });         } else {           break;
-         }       }     }     if (sent > 0) window.dispatchEvent(new Event("ahara:synced"));   } finally {     flushing = false;   } }
+import { apiFetch } from "@/lib/api";
+import {
+  addFailed,
+  classifyFailure,
+  readQueue,
+  removeQueued,
+} from "@/lib/offline-queue";
+import { supabase } from "@/lib/supabase";
+let flushing = false;
+/** Sends saved entries in order. The same id is sent every time, so a replay can never duplicate an entry. */ export async function flushQueue(): Promise<void> {
+  if (flushing || typeof navigator === "undefined" || !navigator.onLine) return;
+  flushing = true;
+  try {
+    const { data } = await supabase().auth.getSession();
+    const userId = data.session?.user.id;
+    if (!userId) return;
+    let sent = 0;
+    for (const item of readQueue()) {
+      if (item.userId !== userId) continue;
+      try {
+        await apiFetch("/api/logs", { method: "POST", json: item.payload });
+        removeQueued(item.payload.id);
+        sent += 1;
+      } catch (caught) {
+        const status = (caught as { status?: number }).status;
+        const message = caught instanceof Error ? caught.message : "";
+        const outcome = classifyFailure(status, message);
+        if (outcome === "done") {
+          removeQueued(item.payload.id);
+          sent += 1;
+        } else if (outcome === "drop") {
+          removeQueued(item.payload.id);
+          addFailed({
+            name: item.name,
+            reason: message || "The server rejected it.",
+          });
+        } else {
+          break;
+        }
+      }
+    }
+    if (sent > 0) window.dispatchEvent(new Event("ahara:synced"));
+  } finally {
+    flushing = false;
+  }
+}

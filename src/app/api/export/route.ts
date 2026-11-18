@@ -1,1 +1,114 @@
-import { NextResponse } from "next/server"; import { logsToCsv, type ExportLogRow } from "@/lib/export"; import { requireUser } from "@/lib/server/request";  const PAGE = 1000; type Spec = { table: string; select: string; column: "owner_id" | "id"; order: string };  const SPECS: Spec[] = [   { table: "profiles", select: "*", column: "id", order: "id" },   { table: "foods", select: "*,food_aliases(*),food_servings(*),food_nutrients(*),product_details(*),product_barcodes(*)", column: "owner_id", order: "id" },   { table: "my_versions", select: "*", column: "owner_id", order: "id" },   { table: "favourite_foods", select: "*", column: "owner_id", order: "food_id" },   { table: "goal_versions", select: "*", column: "owner_id", order: "id" },   { table: "daily_steps", select: "*", column: "owner_id", order: "local_date" },   { table: "activities", select: "*", column: "owner_id", order: "id" },   { table: "trackers", select: "*", column: "owner_id", order: "id" },   { table: "tracker_entries", select: "*", column: "owner_id", order: "id" }, ]; const LOG_SELECT = "*,food_log_nutrients(*),food_log_adjustments(*),food_log_tags(*)";  export async function GET(request: Request) {   const auth = await requireUser(request);   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });   const format = new URL(request.url).searchParams.get("format") === "csv" ? "csv" : "json";   const stamp = new Date().toISOString().slice(0, 10);   const problems: Record<string, string> = {};    async function fetchAll(table: string, select: string, column: string, order: string): Promise<Record<string, unknown>[]> {     const rows: Record<string, unknown>[] = [];     for (let from = 0; ; from += PAGE) {       const { data, error } = await auth!.client.from(table).select(select).eq(column, auth!.user.id).order(order).range(from, from + PAGE - 1);       if (error) {         problems[table] = error.message;         break;       }       const page = (data ?? []) as unknown as Record<string, unknown>[];       rows.push(...page);       if (page.length < PAGE) break;     }     return rows;   }    const logs = await fetchAll("food_logs", LOG_SELECT, "owner_id", "id");   if (problems.food_logs) return NextResponse.json({ error: "Your diary couldn’t be read, so nothing was exported." }, { status: 500 });    if (format === "csv") {     const sorted = [...logs].sort((a, b) => String(a.local_date).localeCompare(String(b.local_date)) || String(a.consumed_at).localeCompare(String(b.consumed_at)));     return new Response(logsToCsv(sorted as unknown as ExportLogRow[]), {       headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="ahara-diary-${stamp}.csv"`, "Cache-Control": "no-store" },     });   }    const data: Record<string, unknown> = { food_logs: logs };   for (const spec of SPECS) data[spec.table] = await fetchAll(spec.table, spec.select, spec.column, spec.order);   const body = {     app: "Ahara", exportedAt: new Date().toISOString(),     note: "Blank or null values are unknown, not zero. Entries keep the nutrition values they had when logged.",     incomplete: Object.keys(problems).length > 0 ? problems : undefined,     data,   };   return new Response(JSON.stringify(body, null, 2), {     headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="ahara-export-${stamp}.json"`, "Cache-Control": "no-store" },   }); }
+import { NextResponse } from "next/server";
+import { logsToCsv, type ExportLogRow } from "@/lib/export";
+import { requireUser } from "@/lib/server/request";
+const PAGE = 1000;
+type Spec = {
+  table: string;
+  select: string;
+  column: "owner_id" | "id";
+  order: string;
+};
+const SPECS: Spec[] = [
+  { table: "profiles", select: "*", column: "id", order: "id" },
+  {
+    table: "foods",
+    select:
+      "*,food_aliases(*),food_servings(*),food_nutrients(*),product_details(*),product_barcodes(*)",
+    column: "owner_id",
+    order: "id",
+  },
+  { table: "my_versions", select: "*", column: "owner_id", order: "id" },
+  {
+    table: "favourite_foods",
+    select: "*",
+    column: "owner_id",
+    order: "food_id",
+  },
+  { table: "goal_versions", select: "*", column: "owner_id", order: "id" },
+  {
+    table: "daily_steps",
+    select: "*",
+    column: "owner_id",
+    order: "local_date",
+  },
+  { table: "activities", select: "*", column: "owner_id", order: "id" },
+  { table: "trackers", select: "*", column: "owner_id", order: "id" },
+  { table: "tracker_entries", select: "*", column: "owner_id", order: "id" },
+];
+const LOG_SELECT =
+  "*,food_log_nutrients(*),food_log_adjustments(*),food_log_tags(*)";
+export async function GET(request: Request) {
+  const auth = await requireUser(request);
+  if (!auth)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const format =
+    new URL(request.url).searchParams.get("format") === "csv" ? "csv" : "json";
+  const stamp = new Date().toISOString().slice(0, 10);
+  const problems: Record<string, string> = {};
+  async function fetchAll(
+    table: string,
+    select: string,
+    column: string,
+    order: string,
+  ): Promise<Record<string, unknown>[]> {
+    const rows: Record<string, unknown>[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await auth!.client
+        .from(table)
+        .select(select)
+        .eq(column, auth!.user.id)
+        .order(order)
+        .range(from, from + PAGE - 1);
+      if (error) {
+        problems[table] = error.message;
+        break;
+      }
+      const page = (data ?? []) as unknown as Record<string, unknown>[];
+      rows.push(...page);
+      if (page.length < PAGE) break;
+    }
+    return rows;
+  }
+  const logs = await fetchAll("food_logs", LOG_SELECT, "owner_id", "id");
+  if (problems.food_logs)
+    return NextResponse.json(
+      { error: "Your diary couldn’t be read, so nothing was exported." },
+      { status: 500 },
+    );
+  if (format === "csv") {
+    const sorted = [...logs].sort(
+      (a, b) =>
+        String(a.local_date).localeCompare(String(b.local_date)) ||
+        String(a.consumed_at).localeCompare(String(b.consumed_at)),
+    );
+    return new Response(logsToCsv(sorted as unknown as ExportLogRow[]), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="ahara-diary-${stamp}.csv"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+  const data: Record<string, unknown> = { food_logs: logs };
+  for (const spec of SPECS)
+    data[spec.table] = await fetchAll(
+      spec.table,
+      spec.select,
+      spec.column,
+      spec.order,
+    );
+  const body = {
+    app: "Ahara",
+    exportedAt: new Date().toISOString(),
+    note: "Blank or null values are unknown, not zero. Entries keep the nutrition values they had when logged.",
+    incomplete: Object.keys(problems).length > 0 ? problems : undefined,
+    data,
+  };
+  return new Response(JSON.stringify(body, null, 2), {
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Disposition": `attachment; filename="ahara-export-${stamp}.json"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}

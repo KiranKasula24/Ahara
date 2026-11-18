@@ -1,1 +1,15 @@
-import { PageHeader } from "@/components/app-shell/PageHeader"; import { ExportPanel } from "@/components/settings/ExportPanel";  export default function ExportPage() {   return (     <>       <PageHeader eyebrow="Your data" title="Export" description="Download everything you’ve saved. Your data stays yours." />       <ExportPanel />     </>   ); }
+import { PageHeader } from "@/components/app-shell/PageHeader";
+import { ExportPanel } from "@/components/settings/ExportPanel";
+export default function ExportPage() {
+  return (
+    <>
+      {" "}
+      <PageHeader
+        eyebrow="Your data"
+        title="Export"
+        description="Download everything you’ve saved. Your data stays yours."
+      />{" "}
+      <ExportPanel />{" "}
+    </>
+  );
+}

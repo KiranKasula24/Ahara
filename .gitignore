@@ -5,3 +5,5 @@ coverage/
 data/source/
 data/output/
 *.tsbuildinfo
+
+test-results/

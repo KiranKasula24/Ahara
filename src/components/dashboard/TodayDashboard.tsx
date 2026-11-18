@@ -14,11 +14,12 @@ import { localDate, shiftDate } from "@/lib/dates";
 import { MEALS } from "@/lib/meals";
 import { supabase } from "@/lib/supabase";
 import { finalKcal, finalValue, sumKnown } from "@/lib/totals";
+import { tagLabel } from "@/lib/tags";
 import { useUndoableDelete } from "@/lib/use-undo-delete";
 import { formatQuantity } from "@/lib/units";
 
-type Log = EditableLog & { food_log_nutrients: unknown };
-const SELECT = "id,food_id,name_snapshot,quantity,unit,meal_type,consumed_at,local_date,food_log_nutrients(final_totals)";
+type Log = EditableLog & { food_log_nutrients: unknown; food_log_adjustments: { id: string }[]; food_log_tags: { tag: string }[] };
+const SELECT = "id,food_id,name_snapshot,quantity,unit,meal_type,consumed_at,local_date,food_log_nutrients(final_totals),food_log_adjustments(id),food_log_tags(tag)";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const quantityText = (log: Log) => (log.unit === "g" ? `${formatQuantity(Number(log.quantity))} g` : `${formatQuantity(Number(log.quantity))} ${log.unit}`);
@@ -74,6 +75,15 @@ export function TodayDashboard() {
     window.addEventListener("ahara:synced", reload);
     return () => window.removeEventListener("ahara:synced", reload);
   }, [load]);
+
+  const editParam = params.get("edit");
+  const [handledEdit, setHandledEdit] = useState(false);
+  useEffect(() => {
+    if (!editParam || handledEdit || status !== "ready") return;
+    const match = logs.find((log) => log.id === editParam);
+    if (match) setEditing(match);
+    setHandledEdit(true);
+  }, [editParam, handledEdit, status, logs]);
 
   const { pending, start: startRemove, undo } = useUndoableDelete<Log>(async (log) => {
     try {
@@ -188,7 +198,14 @@ export function TodayDashboard() {
                   const entryKcal = finalKcal(log.food_log_nutrients);
                   return (
                     <button className="tx-entry" key={log.id} onClick={() => setEditing(log)}>
-                      <span><b>{log.name_snapshot}</b><small>{quantityText(log)}</small></span>
+                      <span>
+                        <b>{log.name_snapshot}</b>
+                        <small>
+                          {quantityText(log)}
+                          {log.food_log_adjustments?.length > 0 && " · Adjusted"}
+                          {log.food_log_tags?.length > 0 && ` · ${log.food_log_tags.map((item) => tagLabel(item.tag)).join(", ")}`}
+                        </small>
+                      </span>
                       <strong>{entryKcal === null ? "Calories unknown" : `${Math.round(entryKcal)} kcal`}</strong>
                     </button>
                   );
