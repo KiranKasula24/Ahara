@@ -8,7 +8,8 @@ import { useSession } from "@/components/app-shell/SessionProvider";
 import { BarcodeFlow } from "@/components/food/BarcodeFlow";
 import { OwnFoodForm } from "@/components/food/OwnFoodForm";
 import { PortionPicker } from "@/components/food/PortionPicker";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
+import { enqueue, removeQueued } from "@/lib/offline-queue";
 import { localDate, localTime, zonedDateTimeToInstant } from "@/lib/dates";
 import { MEALS, mealForHour, type Meal } from "@/lib/meals";
 import type { Adjustment } from "@/lib/nutrition";
@@ -17,7 +18,7 @@ import { availableUnits, defaultKcalLabel, formatQuantity, parseQuantity, servin
 type Recent = { food: FoodSummary; quantity: number; unit: PortionUnit };
 type Quick = { favourites: { food: FoodSummary }[]; recents: Recent[] };
 type SearchVersion = { id: string; name: string; adjustments: Adjustment[]; food: FoodSummary };
-type Logged = { id: string; name: string; meal: Meal; date: string; warning?: string };
+type Logged = { id: string; name: string; meal: Meal; date: string; warning?: string; queued?: boolean };
 const EMPTY_QUICK: Quick = { favourites: [], recents: [] };
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -104,32 +105,8 @@ export function AddFoodExperience() {
     setLastLogged(null);
   }
 
-  async function logEntry(target: FoodSummary, logUnit: PortionUnit, quantity: number, withVersion?: SearchVersion | null): Promise<boolean> {
-    if (!date || !time) return false;
-    setSaving(true);
-    setError("");
-    try {
-      const id = crypto.randomUUID();
-      const consumedAt = zonedDateTimeToInstant(date, time, timeZone);
-      await apiFetch("/api/logs", { method: "POST", json: { id, foodId: target.id, quantity, unit: logUnit, mealType: meal, consumedAt: consumedAt.toISOString() } });
-      let warning: string | undefined;
-      if (withVersion) {
-        try {
-          await apiFetch("/api/logs/adjustments", { method: "POST", json: { logId: id, adjustments: withVersion.adjustments } });
-        } catch {
-          warning = "Logged, but your version’s changes couldn’t be applied. Open the entry from Today to adjust it.";
-        }
-      }
-      setLastLogged({ id, name: withVersion ? withVersion.name : target.canonical_name, meal, date, warning });
-      return true;
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "That entry couldn’t be saved. Your choices are still here.");
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }
 
+  async function logEntry(target: FoodSummary, logUnit: PortionUnit, quantity: number, withVersion?: SearchVersion | null): Promise<boolean> {     if (!date || !time) return false;     setSaving(true);     setError("");     const id = crypto.randomUUID();     const payload = {       id, foodId: target.id, quantity, unit: logUnit, mealType: meal,       consumedAt: zonedDateTimeToInstant(date, time, timeZone).toISOString(),     };     try {       await apiFetch("/api/logs", { method: "POST", json: payload });       let warning: string | undefined;       if (withVersion) {         try {           await apiFetch("/api/logs/adjustments", { method: "POST", json: { logId: id, adjustments: withVersion.adjustments } });         } catch {           warning = "Logged, but your version’s changes couldn’t be applied. Open the entry from Today to adjust it.";         }       }       setLastLogged({ id, name: withVersion ? withVersion.name : target.canonical_name, meal, date, warning });       return true;     } catch (caught) {       const noAnswer = !(caught instanceof ApiError) || !navigator.onLine;       if (noAnswer && withVersion) {         setError("You’re offline. A saved version needs a connection to apply its changes. Your choices are still here.");         return false;       }       if (noAnswer && session?.userId) {         const kept = enqueue({ userId: session.userId, name: target.canonical_name, queuedAt: new Date().toISOString(), payload });         if (kept) {           setLastLogged({ id, name: target.canonical_name, meal, date, queued: true });           return true;         }         setError("You’re offline and this phone couldn’t keep the entry. Try again when you’re back online.");         return false;       }       setError(caught instanceof Error ? caught.message : "That entry couldn’t be saved. Your choices are still here.");       return false;     } finally {       setSaving(false);     }   }
   async function saveFromSheet() {
     const quantity = parseQuantity(amount);
     if (!food || quantity === null) return;
@@ -140,16 +117,9 @@ export function AddFoodExperience() {
     }
   }
 
-  async function undo() {
-    if (!lastLogged) return;
-    try {
-      await apiFetch(`/api/logs?id=${encodeURIComponent(lastLogged.id)}`, { method: "DELETE" });
-      setLastLogged(null);
-    } catch {
-      setError("That entry couldn’t be removed. You can remove it from Today.");
-    }
-  }
 
+  async function undo() {
+    if (!lastLogged) return;     if (lastLogged.queued) {       removeQueued(lastLogged.id);       setLastLogged(null);       return;     }     try {       await apiFetch(`/api/logs?id=${encodeURIComponent(lastLogged.id)}`, { method: "DELETE" });       setLastLogged(null);     } catch {       setError("That entry couldn’t be removed. You can remove it from Today.");     }   }
   async function toggleFavourite(target: FoodSummary) {
     try {
       await apiFetch("/api/favourites", { method: "POST", json: { foodId: target.id, favourite: !favouriteIds.has(target.id) } });
@@ -228,15 +198,7 @@ export function AddFoodExperience() {
   return (
     <>
       <PageHeader eyebrow="Food diary" title="What did you eat?" description="Search dishes or ingredients, scan a pack, then choose the portion." />
-      {lastLogged && (
-        <div className="post-save" role="status">
-          <p>{lastLogged.name} added to {lastLogged.meal}.</p>
-          {lastLogged.warning && <p className="ax-note">{lastLogged.warning}</p>}
-          <Link href={`/today?date=${lastLogged.date}`}>View day</Link>
-          <Link href={`/today?date=${lastLogged.date}&edit=${lastLogged.id}`}>Adjust</Link>
-          <button onClick={() => void undo()}>Undo</button>
-        </div>
-      )}
+User responded: The build plan ends at P10, so there is no P11. P10 is the last build phase. It is the largest one, so it's in two parts, **A: offline and updates** and **B: export, delete and release checks**. The release checklist at the end covers any "P11" hardening.  None of this has been run, and I'm assuming two things about your repo from earlier phases: - `ApiError` is exported from `@/lib/api`, with a `status` field. - `PwaRegister` is mounted once in the root layout.  I can't see the root layout or `next.config.ts` from here. If a check below doesn't behave as described, send me the error text.  ## What offline can and can't do - **Works offline:** "Log again" and favourites that are already on screen. The entry is saved on the phone with its id and sent when you're back online. A replay can't create a duplicate because the server already treats the same id as a replay. - **Needs a connection:** search, scanning, My versions and adjustments. When the app is closed and you open it offline, you get a plain "You're offline" page instead of a browser error. - **Not cached:** the service worker caches only that offline page. Caching app pages or Supabase data would risk showing stale numbers, so I left it out on purpose. - **Update notice:** "A new version is ready · Update" appears after you deploy. It only runs in a production build, not `npm run dev`.  # Part A: offline queue, offline page, update notice  **New `src/lib/offline-queue.ts`**
       {error && <p className="inline-error" role="alert">{error}</p>}
       {whenBar}
 

@@ -69,6 +69,12 @@ export function TodayDashboard() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const reload = () => void load();
+    window.addEventListener("ahara:synced", reload);
+    return () => window.removeEventListener("ahara:synced", reload);
+  }, [load]);
+
   const { pending, start: startRemove, undo } = useUndoableDelete<Log>(async (log) => {
     try {
       await apiFetch(`/api/logs?id=${encodeURIComponent(log.id)}`, { method: "DELETE" });
