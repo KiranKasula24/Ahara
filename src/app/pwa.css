@@ -1,0 +1,39 @@
+/* One colour source: these values match src/design/tokens.ts. Loaded after globals.css. */
+:root {
+  --background: #090909; --surface-1: #111111; --surface-2: #171717; --surface-3: #222222;
+  --border-subtle: #303030; --text-primary: #f5f5f5; --text-secondary: #a1a1aa;
+  --orange-primary: #ff6a00; --orange-highlight: #ff9d42; --orange-soft: #3a2113; --on-orange: #090909;
+  --activity-green: #38c994; --warning: #ffb547; --danger: #ff625c;
+}
+/* No blur effects (design rule). */
+.mobile-bottom-nav { background: var(--surface-1); backdrop-filter: none; }
+.mobile-topbar { background: var(--background); backdrop-filter: none; }
+
+.install-card, .install-hero {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 20px; padding: 16px; border: 1px solid var(--orange-primary); border-radius: 16px; background: var(--orange-soft);
+}
+.install-hero { margin: 20px 0 0; max-width: 560px; }
+.install-title { margin: 0 0 4px; font-weight: 800; color: var(--text-primary); }
+.install-text { margin: 0 0 4px; color: var(--text-secondary); line-height: 1.45; font-size: 14px; }
+.install-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.settings-actions { margin-top: 20px; }
+Step 4: replace these files completely
+
+src/app/layout.tsx
+
+/* Add Food */
+.ax-when { display: grid; gap: 10px; margin: 0 0 16px; }
+.ax-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ax-chip {
+  min-height: 44px; padding: 0 16px; border: 1px solid var(--border-subtle); border-radius: 999px;
+  background: var(--surface-2); color: var(--text-primary); text-transform: capitalize;
+}
+.ax-chip.selected { background: var(--orange-soft); border-color: var(--orange-primary); color: var(--orange-highlight); font-weight: 700; }
+.ax-when-fields { display: flex; flex-wrap: wrap; gap: 10px; }
+.ax-when-fields label { display: grid; gap: 4px; font-size: 13px; color: var(--text-secondary); }
+.ax-note { display: block; margin-top: 2px; color: var(--warning); font-size: 12px; }
+.ax-section { margin-top: 20px; }
+.ax-section h2 { margin: 0 0 8px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
+.ax-quick-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+.ax-quick-row small { display: block; color: var(--text-secondary); }

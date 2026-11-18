@@ -1,29 +1,331 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { AddOwnFoodPanel } from "@/components/AddOwnFoodPanel";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell/PageHeader";
-import { SignInRequired } from "@/components/RouteStates";
-import { resolveQuantity, type Nutrients } from "@/lib/nutrition";
-import { supabase } from "@/lib/supabase";
+import { useSession } from "@/components/app-shell/SessionProvider";
+import { BarcodeFlow } from "@/components/food/BarcodeFlow";
+import { OwnFoodForm } from "@/components/food/OwnFoodForm";
+import { PortionPicker } from "@/components/food/PortionPicker";
+import { apiFetch } from "@/lib/api";
+import { localDate, localTime, zonedDateTimeToInstant } from "@/lib/dates";
+import { MEALS, mealForHour, type Meal } from "@/lib/meals";
+import type { Adjustment } from "@/lib/nutrition";
+import { availableUnits, defaultKcalLabel, formatQuantity, parseQuantity, servingNameFor, type FoodSummary, type PortionUnit } from "@/lib/units";
 
-type NutrientRow = { basis: "per_serving" | "per_100g"; kcal: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null; sat_fat_g: number | null; fibre_g: number | null; free_sugars_g: number | null; total_sugars_g: number | null; sodium_mg: number | null };
-type Food = { id: string; canonical_name: string; serving_mode: "count" | "household" | "grams_only"; food_servings?: { name: string }[]; food_nutrients?: NutrientRow[] };
-const mealTypes = ["breakfast", "lunch", "dinner", "snack"] as const;
-const asNutrients = (row: NutrientRow): Nutrients => ({ kcal: row.kcal, proteinG: row.protein_g, carbsG: row.carbs_g, fatG: row.fat_g, satFatG: row.sat_fat_g, fibreG: row.fibre_g, freeSugarsG: row.free_sugars_g, totalSugarsG: row.total_sugars_g, addedSugarsG: null, sodiumMg: row.sodium_mg });
-const servingName = (food: Food) => food.food_servings?.[0]?.name ?? (food.serving_mode === "grams_only" ? "grams" : food.serving_mode === "count" ? "piece" : "serving");
+type Recent = { food: FoodSummary; quantity: number; unit: PortionUnit };
+type Quick = { favourites: { food: FoodSummary }[]; recents: Recent[] };
+type SearchVersion = { id: string; name: string; adjustments: Adjustment[]; food: FoodSummary };
+type Logged = { id: string; name: string; meal: Meal; date: string; warning?: string };
+const EMPTY_QUICK: Quick = { favourites: [], recents: [] };
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function AddFoodExperience() {
-  const db = useMemo(supabase, []); const [user, setUser] = useState<{ id: string } | null>(null); const [query, setQuery] = useState(""); const [results, setResults] = useState<Food[]>([]); const [food, setFood] = useState<Food | null>(null); const [amount, setAmount] = useState("1"); const [meal, setMeal] = useState<(typeof mealTypes)[number]>("breakfast"); const [searching, setSearching] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [saving, setSaving] = useState(false); const [own, setOwn] = useState(false); const [favourited, setFavourited] = useState(false);
-  const quantity = Number(amount); const unit: "serving" | "g" = food?.serving_mode === "grams_only" ? "g" : "serving";
-  useEffect(() => { db.auth.getUser().then(({ data }) => setUser(data.user)); }, [db]);
-  useEffect(() => { if (!user || query.trim().length < 2) { setResults([]); return; } const controller = new AbortController(); const timer = window.setTimeout(async () => { setSearching(true); setError(""); const { data } = await db.auth.getSession(); try { const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: controller.signal, headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } }); if (!response.ok) throw new Error(); setResults(((await response.json()) as { foods?: Food[] }).foods ?? []); } catch { if (!controller.signal.aborted) setError("We couldn’t search right now. Please try again."); } finally { if (!controller.signal.aborted) setSearching(false); } }, 250); return () => { controller.abort(); window.clearTimeout(timer); }; }, [query, db, user]);
-  async function authorization() { const { data } = await db.auth.getSession(); return { Authorization: `Bearer ${data.session?.access_token ?? ""}` }; }
-  async function favourite() { if (!food) return; const response = await fetch("/api/favourites", { method: "POST", headers: { "Content-Type": "application/json", ...(await authorization()) }, body: JSON.stringify({ foodId: food.id, favourite: !favourited }) }); if (!response.ok) return setNotice("That favourite could not be saved."); setFavourited(!favourited); setNotice(favourited ? "Removed from favourites." : "Saved to favourites."); }
-  async function save() { if (!food || !Number.isFinite(quantity) || quantity <= 0 || saving) return; setSaving(true); const response = await fetch("/api/logs", { method: "POST", headers: { "Content-Type": "application/json", ...(await authorization()) }, body: JSON.stringify({ id: crypto.randomUUID(), foodId: food.id, quantity, unit, mealType: meal, consumedAt: new Date().toISOString() }) }); setSaving(false); if (!response.ok) return setError("Check the amount and try again. Your choices are still here."); setNotice(`${food.canonical_name} was added to ${meal}.`); setFood(null); setQuery(""); }
-  if (!user) return <><PageHeader eyebrow="Food diary" title="Add food" description="Search dishes or ingredients, then choose a portion." /><SignInRequired /></>;
-  if (own) return <><PageHeader eyebrow="Personal food" title="Add a food that isn’t listed" description="Add only what you know; blank nutrition remains unavailable." /><button className="text-link" onClick={() => setOwn(false)}>← Back to search</button><AddOwnFoodPanel initialName={query} onDone={(message) => { setNotice(message); setOwn(false); }} /></>;
-  const nutritionRows = food?.food_nutrients ?? []; const portion = food && Number.isFinite(quantity) && quantity > 0 ? resolveQuantity({ unitClass: food.serving_mode, perServing: nutritionRows.find((row) => row.basis === "per_serving") ? asNutrients(nutritionRows.find((row) => row.basis === "per_serving")!) : undefined, per100g: nutritionRows.find((row) => row.basis === "per_100g") ? asNutrients(nutritionRows.find((row) => row.basis === "per_100g")!) : undefined }, quantity, unit) : null;
-  return <><PageHeader eyebrow="Food diary" title="What did you eat?" description="Search dishes or ingredients, then choose the portion." />{notice && <div className="post-save" role="status"><p>{notice}</p><Link href="/log">View diary</Link><button onClick={() => setNotice("")}>Add another</button></div>}{error && <p className="inline-error" role="alert">{error}</p>}{!food ? <section className="search-panel"><label htmlFor="food-search-pro">Search dishes or ingredients</label><div className="search-input"><input id="food-search-pro" autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try poha, dosa, atukulu..." /><button onClick={() => setQuery("")} aria-label="Clear search">×</button></div><p className="search-status" role="status">{searching ? "Searching…" : query.length >= 2 ? `${results.length} options found` : ""}</p>{query.length >= 2 && !searching && !results.length && !error && <p className="muted">We couldn’t find that dish. Try another name or add your own.</p>}<div className="search-results">{results.map((result) => { const kcal = result.food_nutrients?.find((row) => row.basis === "per_serving")?.kcal; return <button className="search-result" key={result.id} onClick={() => { setFood(result); setAmount(result.serving_mode === "grams_only" ? "100" : "1"); setFavourited(false); }}><span><b>{result.canonical_name}</b><small>{servingName(result)}{kcal === null || kcal === undefined ? " · Nutrition details unavailable" : ` · ${Math.round(kcal)} kcal`}</small></span><span aria-hidden="true">›</span></button>; })}</div><button className="text-link quiet-link" onClick={() => setOwn(true)}>Add a food that isn’t listed</button></section> : <section className="portion-editor"><button className="text-link" onClick={() => setFood(null)}>← Change food</button><div className="selected-food-heading"><div><p className="eyebrow">Selected food</p><h2>{food.canonical_name}</h2></div><button className="favourite-button" aria-pressed={favourited} onClick={() => void favourite()}>{favourited ? "★ Saved" : "☆ Save"}</button></div><fieldset><legend>{unit === "g" ? "Amount (g)" : `How many ${servingName(food)}${quantity === 1 ? "" : "s"}?`}</legend><div className="quantity-stepper"><button onClick={() => setAmount(String(Math.max(unit === "g" ? 1 : 0.25, quantity - (unit === "g" ? 10 : 0.5))))} aria-label="Decrease amount">−</button><input value={amount} inputMode="decimal" onChange={(event) => setAmount(event.target.value)} aria-label="Amount" /><button onClick={() => setAmount(String(quantity + (unit === "g" ? 10 : 0.5)))} aria-label="Increase amount">+</button></div></fieldset><fieldset><legend>When did you have it?</legend><div className="meal-picker">{mealTypes.map((item) => <button key={item} className={meal === item ? "selected" : ""} aria-pressed={meal === item} onClick={() => setMeal(item)}>{item}</button>)}</div></fieldset>{portion?.ok ? <section className="nutrition-preview" aria-live="polite"><h3>Nutrition for this portion</h3><div className="nutrition-grid">{[["Calories", portion.nutrients.kcal, "kcal"], ["Protein", portion.nutrients.proteinG, "g"], ["Carbs", portion.nutrients.carbsG, "g"], ["Fat", portion.nutrients.fatG, "g"]].map(([name, value, suffix]) => <div key={String(name)}><span>{name}</span><strong>{value === null ? "—" : `${Math.round(Number(value) * 10) / 10}${suffix}`}</strong></div>)}</div></section> : <p className="nutrition-note">Nutrition details aren’t available for this amount.</p>}<button className="button primary full-width" disabled={saving || !Number.isFinite(quantity) || quantity <= 0} onClick={() => void save()}>{saving ? "Adding to diary…" : `Add to ${meal}`}</button></section>}</>;
+  const session = useSession();
+  const params = useSearchParams();
+  const timeZone = session?.timeZone ?? "Asia/Kolkata";
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<FoodSummary[]>([]);
+  const [versions, setVersions] = useState<SearchVersion[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [quick, setQuick] = useState<Quick>(EMPTY_QUICK);
+  const [food, setFood] = useState<FoodSummary | null>(null);
+  const [version, setVersion] = useState<SearchVersion | null>(null);
+  const [unit, setUnit] = useState<PortionUnit>("serving");
+  const [amount, setAmount] = useState("1");
+  const [meal, setMeal] = useState<Meal>("breakfast");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [showWhen, setShowWhen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [lastLogged, setLastLogged] = useState<Logged | null>(null);
+  const [own, setOwn] = useState(false);
+  const [scanning, setScanning] = useState(false);
+
+  const today = date ? localDate(timeZone) : "";
+
+  useEffect(() => {
+    const now = new Date();
+    const todayDate = localDate(timeZone, now);
+    const dateParam = params.get("date");
+    const mealParam = params.get("meal");
+    const useParamDate = Boolean(dateParam && DATE_PATTERN.test(dateParam) && dateParam <= todayDate);
+    setDate(useParamDate ? (dateParam as string) : todayDate);
+    setTime(localTime(timeZone, now));
+    setMeal(MEALS.includes(mealParam as Meal) ? (mealParam as Meal) : mealForHour(Number(localTime(timeZone, now).slice(0, 2))));
+  }, [timeZone, params]);
+
+  useEffect(() => {
+    apiFetch<Quick>("/api/foods/quick").then(setQuick).catch(() => setQuick(EMPTY_QUICK));
+  }, [lastLogged, own]);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setVersions([]);
+      setSearching(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearching(true);
+      setError("");
+      try {
+        const data = await apiFetch<{ foods: FoodSummary[]; versions?: SearchVersion[] }>(`/api/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal });
+        setResults(data.foods);
+        setVersions(data.versions ?? []);
+      } catch {
+        if (!controller.signal.aborted) setError("We couldn’t search right now. Please try again.");
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
+  const favouriteIds = new Set(quick.favourites.map((item) => item.food.id));
+
+  function choose(next: FoodSummary, preset?: { unit: PortionUnit; quantity: number }, chosenVersion?: SearchVersion) {
+    const units = availableUnits(next);
+    const usePreset = preset && units.includes(preset.unit);
+    const startUnit = usePreset ? preset.unit : units[0] ?? "serving";
+    setFood(next);
+    setVersion(chosenVersion ?? null);
+    setUnit(startUnit);
+    setAmount(String(usePreset ? preset.quantity : startUnit === "g" ? 100 : 1));
+    setError("");
+    setLastLogged(null);
+  }
+
+  async function logEntry(target: FoodSummary, logUnit: PortionUnit, quantity: number, withVersion?: SearchVersion | null): Promise<boolean> {
+    if (!date || !time) return false;
+    setSaving(true);
+    setError("");
+    try {
+      const id = crypto.randomUUID();
+      const consumedAt = zonedDateTimeToInstant(date, time, timeZone);
+      await apiFetch("/api/logs", { method: "POST", json: { id, foodId: target.id, quantity, unit: logUnit, mealType: meal, consumedAt: consumedAt.toISOString() } });
+      let warning: string | undefined;
+      if (withVersion) {
+        try {
+          await apiFetch("/api/logs/adjustments", { method: "POST", json: { logId: id, adjustments: withVersion.adjustments } });
+        } catch {
+          warning = "Logged, but your version’s changes couldn’t be applied. Open the entry from Today to adjust it.";
+        }
+      }
+      setLastLogged({ id, name: withVersion ? withVersion.name : target.canonical_name, meal, date, warning });
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "That entry couldn’t be saved. Your choices are still here.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveFromSheet() {
+    const quantity = parseQuantity(amount);
+    if (!food || quantity === null) return;
+    if (await logEntry(food, unit, quantity, version)) {
+      setFood(null);
+      setVersion(null);
+      setQuery("");
+    }
+  }
+
+  async function undo() {
+    if (!lastLogged) return;
+    try {
+      await apiFetch(`/api/logs?id=${encodeURIComponent(lastLogged.id)}`, { method: "DELETE" });
+      setLastLogged(null);
+    } catch {
+      setError("That entry couldn’t be removed. You can remove it from Today.");
+    }
+  }
+
+  async function toggleFavourite(target: FoodSummary) {
+    try {
+      await apiFetch("/api/favourites", { method: "POST", json: { foodId: target.id, favourite: !favouriteIds.has(target.id) } });
+      setQuick(await apiFetch<Quick>("/api/foods/quick"));
+    } catch {
+      setError("That favourite couldn’t be saved.");
+    }
+  }
+
+  const whenBar = (
+    <section className="ax-when" aria-label="When did you have it?">
+      <div className="ax-chips">
+        {MEALS.map((item) => (
+          <button key={item} className={`ax-chip ${meal === item ? "selected" : ""}`} aria-pressed={meal === item} onClick={() => setMeal(item)}>{item}</button>
+        ))}
+      </div>
+      <p className="muted">
+        {date === today ? "Today" : date} at {time}{" "}
+        <button className="text-link" onClick={() => setShowWhen(!showWhen)}>{showWhen ? "Done" : "Change date or time"}</button>
+      </p>
+      {showWhen && (
+        <div className="ax-when-fields">
+          <label>Date<input type="date" value={date} max={today} onChange={(event) => setDate(event.target.value)} /></label>
+          <label>Time<input type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        </div>
+      )}
+    </section>
+  );
+
+  if (own) {
+    return (
+      <>
+        <PageHeader eyebrow="Your own food" title="Add a food that isn’t listed" description="Add what you know. Anything you leave blank stays unknown." />
+        <OwnFoodForm initialName={query.trim()} onCancel={() => setOwn(false)} onSaved={(saved) => { setOwn(false); choose(saved); }} />
+      </>
+    );
+  }
+
+  if (food) {
+    const quantity = parseQuantity(amount);
+    const favourite = favouriteIds.has(food.id);
+    return (
+      <>
+        <PageHeader eyebrow="Food diary" title="How much?" />
+        <section className="portion-editor">
+          <button className="text-link" onClick={() => { setFood(null); setVersion(null); }}>← Change food</button>
+          <div className="selected-food-heading">
+            <div>
+              <p className="eyebrow">{version ? "My version" : "Selected food"}</p>
+              <h2>{version ? version.name : food.canonical_name}</h2>
+              {version && (
+                <p className="muted">
+                  Based on {food.canonical_name}, with your saved changes.{" "}
+                  <button className="text-link" onClick={() => setVersion(null)}>Use without them</button>
+                </p>
+              )}
+              {food.match_quality === "approximate" && <p className="ax-note">Closest match, not the same dish.</p>}
+            </div>
+            <button className="favourite-button" aria-pressed={favourite} onClick={() => void toggleFavourite(food)}>{favourite ? "★ Saved" : "☆ Save"}</button>
+          </div>
+          <PortionPicker food={food} unit={unit} amount={amount} adjustments={version?.adjustments} onUnitChange={setUnit} onAmountChange={setAmount} />
+          {availableUnits(food).length > 0 && (
+            <>
+              {whenBar}
+              {error && <p className="inline-error" role="alert">{error}</p>}
+              <button className="button primary full-width" disabled={saving || quantity === null || !date || !time} onClick={() => void saveFromSheet()}>
+                {saving ? "Adding…" : `Add to ${meal}`}
+              </button>
+            </>
+          )}
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader eyebrow="Food diary" title="What did you eat?" description="Search dishes or ingredients, scan a pack, then choose the portion." />
+      {lastLogged && (
+        <div className="post-save" role="status">
+          <p>{lastLogged.name} added to {lastLogged.meal}.</p>
+          {lastLogged.warning && <p className="ax-note">{lastLogged.warning}</p>}
+          <Link href={`/today?date=${lastLogged.date}`}>View day</Link>
+          <Link href={`/today?date=${lastLogged.date}&edit=${lastLogged.id}`}>Adjust</Link>
+          <button onClick={() => void undo()}>Undo</button>
+        </div>
+      )}
+      {error && <p className="inline-error" role="alert">{error}</p>}
+      {whenBar}
+
+      <section className="search-panel">
+        <label htmlFor="food-search">Search dishes or ingredients</label>
+        <div className="search-input">
+          <input id="food-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try poha, dosa, idli…" autoComplete="off" />
+          <button onClick={() => setQuery("")} aria-label="Clear search">×</button>
+        </div>
+        <button className="button secondary" onClick={() => setScanning(true)}>Scan a barcode</button>
+        <p className="search-status" role="status">{searching ? "Searching…" : query.trim().length >= 2 ? `${results.length + versions.length} options found` : ""}</p>
+
+        {query.trim().length >= 2 ? (
+          <>
+            {versions.length > 0 && (
+              <section className="ax-section">
+                <h2>My versions</h2>
+                <div className="search-results">
+                  {versions.map((item) => (
+                    <button className="search-result" key={item.id} onClick={() => choose(item.food, undefined, item)}>
+                      <span>
+                        <b>{item.name}</b>
+                        <small>Based on {item.food.canonical_name} · {item.adjustments.map((adjustment) => adjustment.label).join(", ")}</small>
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+            {!searching && !results.length && !versions.length && !error && <p className="muted">We couldn’t find that dish. Try another name, scan the pack, or add your own below.</p>}
+            <div className="search-results">
+              {results.map((result) => {
+                const aliasDiffers = result.matched_alias && result.matched_alias.toLowerCase() !== result.canonical_name.toLowerCase();
+                return (
+                  <button className="search-result" key={result.id} onClick={() => choose(result)}>
+                    <span>
+                      <b>{result.canonical_name}</b>
+                      <small>{defaultKcalLabel(result)}{result.owner_id ? " · Your food" : ""}</small>
+                      {(aliasDiffers || result.match_quality === "approximate") && (
+                        <small className="ax-note">
+                          {aliasDiffers && `Matched “${result.matched_alias}”`}
+                          {aliasDiffers && result.match_quality === "approximate" && " · "}
+                          {result.match_quality === "approximate" && "Closest match, not the same dish"}
+                        </small>
+                      )}
+                    </span>
+                    <span aria-hidden="true">›</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            {quick.recents.length > 0 && (
+              <section className="ax-section">
+                <h2>Recent</h2>
+                {quick.recents.map((item) => (
+                  <div className="ax-quick-row" key={item.food.id}>
+                    <button className="text-link" onClick={() => choose(item.food, { unit: item.unit, quantity: item.quantity })}>
+                      <b>{item.food.canonical_name}</b>
+                      <small>Last: {formatQuantity(item.quantity)} {item.unit === "g" ? "g" : servingNameFor(item.food)}</small>
+                    </button>
+                    <button className="button secondary" disabled={saving || !date} onClick={() => void logEntry(item.food, item.unit, item.quantity)}>Log again</button>
+                  </div>
+                ))}
+              </section>
+            )}
+            {quick.favourites.length > 0 && (
+              <section className="ax-section">
+                <h2>Favourites</h2>
+                {quick.favourites.map((item) => (
+                  <div className="ax-quick-row" key={item.food.id}>
+                    <button className="text-link" onClick={() => choose(item.food)}>
+                      <b>{item.food.canonical_name}</b>
+                      <small>{defaultKcalLabel(item.food)}</small>
+                    </button>
+                  </div>
+                ))}
+              </section>
+            )}
+          </>
+        )}
+        <button className="text-link quiet-link" onClick={() => setOwn(true)}>Add a food that isn’t listed</button>
+        <p className="muted"><Link href="/my-foods">Manage my foods</Link></p>
+      </section>
+
+      {scanning && <BarcodeFlow onClose={() => setScanning(false)} onFood={(scanned) => { setScanning(false); choose(scanned); }} />}
+    </>
+  );
 }

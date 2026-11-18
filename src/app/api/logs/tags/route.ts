@@ -1,12 +1,29 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/server/request";
 
-const permitted = new Set(["junk", "homemade", "sugary_junk", "fried", "sweet", "sugary_drink", "packaged_snack", "high_sodium"]);
+const PERMITTED = new Set(["junk", "homemade", "sugary_junk", "fried", "sweet", "sugary_drink", "packaged_snack", "high_sodium"]);
+const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });
+
 export async function PUT(request: Request) {
-  const auth = await requireUser(request); if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { logId, tags } = await request.json() as { logId?: string; tags?: { tag: string; source: "auto" | "user" }[] };
-  if (!logId || !Array.isArray(tags) || tags.some((item) => !permitted.has(item.tag) || !["auto", "user"].includes(item.source))) return NextResponse.json({ error: "Invalid tags." }, { status: 400 });
-  const { error: removeError } = await auth.client.from("food_log_tags").delete().eq("log_id", logId); if (removeError) return NextResponse.json({ error: removeError.message }, { status: 400 });
-  if (tags.length) { const { error } = await auth.client.from("food_log_tags").insert(tags.map((item) => ({ log_id: logId, ...item }))); if (error) return NextResponse.json({ error: error.message }, { status: 400 }); }
-  return NextResponse.json({}, { status: 204 });
+  const auth = await requireUser(request);
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let body: { logId?: unknown; tags?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return bad("Invalid tags.");
+  }
+  const tags = body.tags;
+  if (typeof body.logId !== "string" || !Array.isArray(tags) || tags.length > 8 || tags.some((tag) => typeof tag !== "string" || !PERMITTED.has(tag))) return bad("Invalid tags.");
+  const unique = [...new Set(tags as string[])];
+
+  if (unique.length) {
+    const { error } = await auth.client.from("food_log_tags").upsert(unique.map((tag) => ({ log_id: body.logId, tag, source: "user" })), { onConflict: "log_id,tag" });
+    if (error) return bad(error.message);
+  }
+  let remove = auth.client.from("food_log_tags").delete().eq("log_id", body.logId as string);
+  if (unique.length) remove = remove.not("tag", "in", `(${unique.join(",")})`);
+  const { error: removeError } = await remove;
+  if (removeError) return bad(removeError.message);
+  return NextResponse.json({ tags: unique });
 }
