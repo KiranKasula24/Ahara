@@ -1,7 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Geist } from "next/font/google";
 import "./globals.css";
 import "./pwa.css";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: { default: "Ahara", template: "%s · Ahara" },
@@ -10,19 +14,20 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/brand/ahara-mark.png", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png",
+    apple: "/brand/ahara-mark.png",
   },
 };
 
-export const viewport: Viewport = { themeColor: "#090909", width: "device-width", initialScale: 1, viewportFit: "cover" };
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+
+export const viewport: Viewport = { themeColor: "#14110d", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className={cn("font-sans", geist.variable)}>
+      <body className={inter.variable}>
         {children}
         <PwaRegister />
       </body>

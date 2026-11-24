@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiFetch } from "@/lib/api";
 import { shiftAnchor, type Insights, type RangeKind } from "@/lib/insights";
 import { tagLabel } from "@/lib/tags";
+import { MetricGrid } from "@/components/ui/metric-grid";
 
 const RANGES: [RangeKind, string][] = [["week", "Week"], ["month", "Month"], ["year", "Year"]];
 const fmt = (value: number) => value.toLocaleString("en-IN");
@@ -30,6 +32,7 @@ export function InsightsExperience() {
   const atEnd = insights && data ? insights.end >= data.today : true;
   const max = insights ? Math.max(1, ...insights.buckets.map((bucket) => Math.max(bucket.kcal ?? 0, bucket.goal ?? 0))) : 1;
   const unit = range === "year" ? "average per logged day" : "per day";
+  const chartData = insights?.buckets.map((bucket) => ({ label: bucket.label, kcal: bucket.kcal, goal: bucket.goal, partial: bucket.partial })) ?? [];
 
   return (
     <>
@@ -52,32 +55,31 @@ export function InsightsExperience() {
 
           <section className="ax-section">
             <h2>Coverage</h2>
-            <p>Logged {insights.loggedDays} of {insights.elapsedDays} day{insights.elapsedDays === 1 ? "" : "s"}.</p>
+            <MetricGrid metrics={[{ label: "Logged", value: insights.loggedDays, tone: "positive" }, { label: "Days in range", value: insights.elapsedDays }]} />
+            <p className="insight-copy">You logged food on <strong>{insights.loggedDays} of {insights.elapsedDays}</strong> day{insights.elapsedDays === 1 ? "" : "s"} in this period.</p>
             {insights.average.kcal === null ? (
-              <p className="muted">No calorie totals yet for this period.</p>
+              <p className="insight-callout">No calorie totals are available for this period yet.</p>
             ) : (
-              <p>
-                Average on logged days: <strong>{insights.average.partial ? "at least " : ""}{fmt(insights.average.kcal)} kcal</strong>
-                {insights.average.partial && <span className="muted"> (some entries have unknown calories)</span>}
-              </p>
+              <div className="insight-callout"><span>Average on logged days</span><strong>{insights.average.partial ? "At least " : ""}{fmt(insights.average.kcal)} kcal</strong>{insights.average.partial && <small>Some entries have unknown calories, so this is a minimum.</small>}</div>
             )}
-            {insights.unknownEntries > 0 && <p className="muted">{insights.unknownEntries} entr{insights.unknownEntries === 1 ? "y has" : "ies have"} unknown calories and {insights.unknownEntries === 1 ? "is" : "are"} left out of totals.</p>}
+            {insights.unknownEntries > 0 && <p className="insight-note">{insights.unknownEntries} entr{insights.unknownEntries === 1 ? "y has" : "ies have"} unknown calories and {insights.unknownEntries === 1 ? "is" : "are"} excluded from totals.</p>}
           </section>
 
           <section className="ax-section">
             <h2>Calories ({unit})</h2>
-            <div className="ax-bars" role="img" aria-label={`Bar chart of calories ${unit} for ${insights.label}`}>
-              {insights.buckets.map((bucket) => (
-                <div className="ax-barcol" key={bucket.key} title={bucket.kcal === null ? (bucket.logged ? "Calories unknown" : "Not logged") : `${bucket.partial ? "At least " : ""}${fmt(bucket.kcal)} kcal`}>
-                  <div className="ax-bartrack">
-                    {bucket.goal !== null && <i className="ax-goaltick" style={{ bottom: `${(bucket.goal / max) * 100}%` }} />}
-                    {bucket.kcal !== null && <span className={`ax-barfill ${bucket.partial ? "partial" : ""}`} style={{ height: `${Math.max(2, (bucket.kcal / max) * 100)}%` }} />}
-                  </div>
-                  <small>{bucket.label}</small>
-                </div>
-              ))}
+            <div className="insights-chart" role="img" aria-label={`Bar chart of calories ${unit} for ${insights.label}`}>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={chartData} margin={{ top: 12, right: 4, left: -22, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
+                  <XAxis dataKey="label" tick={{ fill: "var(--text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "var(--text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: "var(--brand-soft)" }} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", background: "var(--surface-1)", color: "var(--text-primary)" }} formatter={(value) => value === null ? "Unknown" : `${fmt(Number(value))} kcal`} />
+                  {insights.hasGoal && <ReferenceLine y={insights.buckets.find((bucket) => bucket.goal !== null)?.goal ?? 0} stroke="var(--text-primary)" strokeDasharray="5 4" />}
+                  <Bar dataKey="kcal" fill="var(--brand)" radius={[6, 6, 0, 0]} maxBarSize={34} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <p className="muted">Hatched bars are at least that much, because some entries have unknown calories. Empty means nothing logged.{insights.hasGoal ? " The dash marks your goal for that day." : ""}</p>
+            <p className="insight-note">Empty bars mean nothing was logged. Values exclude entries with unknown calories.{insights.hasGoal ? " The dashed line marks your daily goal." : ""}</p>
           </section>
 
           {insights.hasGoal && (

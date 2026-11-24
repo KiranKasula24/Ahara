@@ -23,7 +23,9 @@ Run the migrations in this order. Migration 005 adds the log-local-date and froz
 Afterward, load the INDB catalogue with the service-role import script. Do not put a service-role key in client-side code. The app uses only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the browser.
 
 To verify row-level security manually, create two test users. Logged in as user A, create a custom food and a food log. Logged in as user B, selecting `foods`, `food_logs`, `food_log_nutrients`, `food_log_adjustments`, `food_log_tags`, `favourite_foods`, `my_versions`, and `goal_versions` through the Data API must not return or modify A's private rows. Shared catalogue foods remain readable but not client-writable.
-## Phase 14: personal activity-energy target
+## Later migrations and repairs
 
-Run [`202611040016_phase_14_goal_types.sql`](../supabase/migrations/202611040016_phase_14_goal_types.sql) in the Supabase SQL Editor after the earlier migrations. It adds the separate versioned `activity_kcal` target used by onboarding. It does **not** change food logs or create net calories.
+Run every migration in `supabase/migrations` in filename order, including [`202611040016_phase_14_goal_types.sql`](../supabase/migrations/202611040016_phase_14_goal_types.sql). It adds the separate versioned `activity_kcal` target used by onboarding and does **not** change food logs or create net calories.
+
+If the deployment reports either an `activity_kcal` goal constraint error or an RLS error while saving a custom food, run [`202611240023_goal_and_own_food_rls_repair.sql`](../supabase/migrations/202611240023_goal_and_own_food_rls_repair.sql). It is idempotent and repairs both issues without modifying existing food or diary data.
 

@@ -5,7 +5,7 @@ export default function ActivityPage() {
   return (
     <>
       <PageHeader eyebrow="Activity" title="Movement and trackers" description="Log steps and workouts, and keep your own daily trackers." />
-      <ActivityExperience />
+      <div className="activity-layout"><ActivityExperience /></div>
     </>
   );
 }

@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { EditEntrySheet, type EditableLog } from "@/components/dashboard/EditEntrySheet";
 import { IntakeRing } from "@/components/dashboard/IntakeRing";
+import { MetricGrid } from "@/components/ui/metric-grid";
 import { PageHeader } from "@/components/app-shell/PageHeader";
 import { useSession } from "@/components/app-shell/SessionProvider";
 import { CapabilityState } from "@/components/RouteStates";
@@ -132,18 +134,16 @@ export function TodayDashboard() {
     <>
       <PageHeader eyebrow="Daily dashboard" title={date === today ? "Today" : date} action={<Link className="button primary" href={`/add?date=${date}`}>Add food</Link>} />
 
-      <div className="tx-strip" role="group" aria-label="Choose a day">
-        {stripDays.map((day) => (
-          <button key={day} className={`tx-day ${day === date ? "selected" : ""}`} aria-pressed={day === date} onClick={() => setDate(day)}>
-            <small>{weekday(day)}</small>
-            <b>{Number(day.slice(8))}</b>
-          </button>
-        ))}
-      </div>
-      <div className="date-row">
-        <label htmlFor="today-date">Jump to a date</label>
-        <input id="today-date" type="date" value={date} max={today} onChange={(event) => event.target.value && setDate(event.target.value)} />
-      </div>
+      <section className="tx-date-picker" aria-label="Choose a day">
+        <div className="tx-date-controls">
+          <button className="tx-date-arrow" aria-label="Previous day" onClick={() => setDate(shiftDate(date, -1))}><ChevronLeft size={18} /></button>
+          <div className="tx-strip" role="group" aria-label="Seven-day selector">
+            {stripDays.map((day) => <button key={day} className={`tx-day ${day === date ? "selected" : ""}`} aria-pressed={day === date} onClick={() => setDate(day)}><small>{weekday(day)}</small><b>{Number(day.slice(8))}</b></button>)}
+          </div>
+          <button className="tx-date-arrow" aria-label="Next day" disabled={date >= today} onClick={() => setDate(shiftDate(date, 1))}><ChevronRight size={18} /></button>
+        </div>
+        <label className="tx-jump-date" htmlFor="today-date"><CalendarDays size={15} /><span>Jump to date</span><input id="today-date" type="date" value={date} max={today} onChange={(event) => event.target.value && setDate(event.target.value)} /></label>
+      </section>
 
       {status === "loading" ? (
         <div className="skeleton-stack"><div /><div /><div /></div>
@@ -161,11 +161,7 @@ export function TodayDashboard() {
             </div>
           </section>
 
-          <section className="tx-macros" aria-label="Macros">
-            <div className="tx-macro"><span>Protein</span><strong>{macroText(macro("proteinG"))}</strong></div>
-            <div className="tx-macro"><span>Carbs</span><strong>{macroText(macro("carbsG"))}</strong></div>
-            <div className="tx-macro"><span>Fat</span><strong>{macroText(macro("fatG"))}</strong></div>
-          </section>
+          <MetricGrid metrics={[{ label: "Protein", value: macroText(macro("proteinG")), tone: "positive" }, { label: "Carbs", value: macroText(macro("carbsG")), tone: "brand" }, { label: "Fat", value: macroText(macro("fatG")) }]} />
 
           {intakeGoal === null && activityGoal === null && (
             <section className="state-card">

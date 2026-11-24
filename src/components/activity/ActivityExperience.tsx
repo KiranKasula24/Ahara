@@ -142,7 +142,7 @@ export function ActivityExperience() {
             <p className="muted">{describeActivity(workouts, goal)}</p>
             {goal === null && <p className="muted">No activity target set. <Link href="/goals">Set one in Goals</Link>, or leave it off.</p>}
             {workouts.map((workout) => (
-              <div className="ax-quick-row" key={workout.id}>
+              <div className="ax-quick-row ax-workout-row" key={workout.id}>
                 <span>
                   <b>{workout.name}</b>
                   <small>{workout.duration_min} min · {workout.kcal === null ? "calories not entered" : `${Math.round(workout.kcal)} kcal`}</small>
@@ -163,7 +163,7 @@ export function ActivityExperience() {
           <section className="ax-section">
             <h2>Steps</h2>
             <p className="muted">{steps === null ? "Not entered. This stays unknown, not zero." : `${steps.toLocaleString("en-IN")} steps`}</p>
-            <div className="ax-quick-row">
+            <div className="ax-quick-row ax-steps-row">
               <input inputMode="numeric" aria-label="Steps" value={stepsText} onChange={(event) => setStepsText(event.target.value)} placeholder="Steps for the day" />
               <button className="button secondary" onClick={() => void saveSteps()}>Save steps</button>
             </div>

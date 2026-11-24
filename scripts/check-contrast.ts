@@ -1,6 +1,9 @@
-import { tokens } from "../src/design/tokens";
+import { dark, light } from "../src/design/tokens";
 import { contrastRatio } from "../src/lib/contrast";
-const checks: [string, string, string, number][] = [["primary/surface-1", tokens.textPrimary, tokens.surface1, 4.5], ["primary/surface-2", tokens.textPrimary, tokens.surface2, 4.5], ["primary/surface-3", tokens.textPrimary, tokens.surface3, 4.5], ["secondary/surface-2", tokens.textSecondary, tokens.surface2, 4.5], ["orange/surface-2", tokens.orangePrimary, tokens.surface2, 4.5], ["on-orange/orange", tokens.onOrange, tokens.orangePrimary, 4.5]];
+type Palette = typeof dark;
+const checks: [keyof Palette, keyof Palette, number][] = [["textPrimary", "surface1", 4.5], ["textPrimary", "surface2", 4.5], ["textPrimary", "surface3", 4.5], ["textSecondary", "surface2", 4.5], ["brandText", "surface2", 4.5], ["onBrand", "brand", 4.5], ["positive", "positiveSoft", 3], ["negative", "negativeSoft", 3]];
 let failed = false;
-for (const [name, fg, bg, threshold] of checks) { const value = contrastRatio(fg, bg); console.log(`${name}: ${value.toFixed(2)}:1 (minimum ${threshold})`); if (value < threshold) failed = true; }
+for (const [themeName, palette] of Object.entries({ dark, light }) as [string, Palette][]) {
+  for (const [foreground, background, threshold] of checks) { const value = contrastRatio(palette[foreground], palette[background]); console.log(`${themeName} ${foreground}/${background}: ${value.toFixed(2)}:1 (minimum ${threshold})`); if (value < threshold) failed = true; }
+}
 if (failed) process.exitCode = 1;

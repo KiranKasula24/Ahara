@@ -1,17 +1,21 @@
 import Link from "next/link";
+import type { ComponentType } from "react";
+import { Activity, Search, ShieldCheck } from "lucide-react";
+import { BentoGrid, BentoGridItem } from "@/components/ui/bento-grid";
+import { BrandLogo } from "@/components/app-shell/BrandLogo";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
-const features = [
-  ["Indian-first logging", "Portions and meal names that fit everyday Indian food."],
-  ["Evidence, not guesses", "Unknown nutrition stays unavailable, never silently shown as zero."],
-  ["Private by default", "Your diary is protected by your own account and row-level security."],
+const features: { title: string; detail: string; Icon: ComponentType<{ size?: number }> }[] = [
+  { title: "Indian-first logging", detail: "Portions and meal names that fit everyday Indian food.", Icon: Search },
+  { title: "Evidence, not guesses", detail: "Unknown nutrition stays unavailable, never silently shown as zero.", Icon: Activity },
+  { title: "Private by default", detail: "Your diary is protected by your own account and row-level security.", Icon: ShieldCheck },
 ];
 
 export default function LandingPage() {
   return (
     <main className="marketing">
       <nav className="marketing-nav">
-        <span className="brand"><span className="brand-mark">A</span>Ahara</span>
+        <span className="brand"><BrandLogo />Ahara</span>
         <Link className="button secondary" href="/login">Sign in</Link>
       </nav>
       <section className="hero">
@@ -23,15 +27,11 @@ export default function LandingPage() {
           <Link className="button primary" href="/login">Get started</Link>
         </div>
       </section>
-      <section className="feature-grid">
-        {features.map(([title, detail], index) => (
-          <article className="feature-card" key={title}>
-            <span className="feature-number">0{index + 1}</span>
-            <h2>{title}</h2>
-            <p>{detail}</p>
-          </article>
+      <BentoGrid className="feature-grid">
+        {features.map(({ title, detail, Icon }, index) => (
+          <BentoGridItem key={title} title={title} description={detail} icon={<Icon size={18} />} header={<span className="feature-number">0{index + 1}</span>} className="feature-card" />
         ))}
-      </section>
+      </BentoGrid>
     </main>
   );
 }
