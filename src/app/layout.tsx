@@ -1,11 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import "./pwa.css";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
-import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: { default: "Ahara", template: "%s · Ahara" },
@@ -26,7 +23,7 @@ export const viewport: Viewport = { themeColor: "#14110d", width: "device-width"
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en">
       <body className={inter.variable}>
         {children}
         <PwaRegister />
