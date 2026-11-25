@@ -6,8 +6,10 @@ const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => (
 
 export async function sendAharaSignInEmail({ to, actionLink, code, appUrl }: SignInEmail) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.AHARA_EMAIL_FROM;
-  if (!apiKey || !from) throw new Error("Email delivery is not configured. Add RESEND_API_KEY and AHARA_EMAIL_FROM.");
+  // Resend's built-in sender keeps early testing simple. A verified custom sender
+  // can be provided later, without changing the authentication flow.
+  const from = process.env.AHARA_EMAIL_FROM || "Ahara <onboarding@resend.dev>";
+  if (!apiKey) throw new Error("Email delivery is not configured. Add RESEND_API_KEY.");
   const logoUrl = `${appUrl.replace(/\/$/, "")}/brand/ahara-lockup.png`;
   const resend = new Resend(apiKey);
   const { error } = await resend.emails.send({

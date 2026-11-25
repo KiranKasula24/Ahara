@@ -4,18 +4,18 @@ Ahara sends passwordless sign-in email itself through Resend. Supabase does not 
 
 ## 1. Configure Resend
 
-1. Verify the sending domain in Resend.
-2. Set a sender address on that domain, for example `Ahara <hello@yourdomain.com>`.
-3. Add these server-only values to the deployment environment (and `.env.local` for local testing):
+1. Create a Resend API key.
+2. Add these server-only values to the deployment environment (and `.env.local` for local testing):
 
 ```dotenv
 APP_URL=https://app.yourdomain.com
 RESEND_API_KEY=re_...
-AHARA_EMAIL_FROM=Ahara <hello@yourdomain.com>
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
 Never expose `RESEND_API_KEY` or `SUPABASE_SERVICE_ROLE_KEY` with a `NEXT_PUBLIC_` prefix.
+
+The app defaults to Resend's built-in test sender, so `AHARA_EMAIL_FROM` is optional. With that test sender, Resend delivers only to the email address associated with the Resend account. When you later need to email other users, set `AHARA_EMAIL_FROM` to an address on a Resend-verified domain.
 
 ## 2. Configure Supabase redirect URLs
 

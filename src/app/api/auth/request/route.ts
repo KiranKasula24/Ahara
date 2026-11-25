@@ -16,7 +16,9 @@ export async function POST(request: Request) {
     if (error || !data?.properties?.action_link || !data.properties.email_otp) throw new Error(error?.message ?? "Could not prepare sign-in credentials.");
     await sendAharaSignInEmail({ to: email, actionLink: data.properties.action_link, code: data.properties.email_otp, appUrl });
   } catch (error) {
-    const message = error instanceof Error && error.message.startsWith("Email delivery is not configured") ? error.message : "We could not send that email. Please try again shortly.";
+    console.error("Ahara authentication email request failed", error);
+    const configurationError = error instanceof Error && /not configured/i.test(error.message);
+    const message = configurationError ? "Sign-in email is not configured yet. Please contact the app administrator." : "We could not send that email. Please try again shortly.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
